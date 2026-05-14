@@ -112,10 +112,9 @@ clipgnome/
 ---
 
 ## Configuration
-
+```
 It has no settings; it's a simple app just for saving and accessing your clipboards.
 ```
-
 ---
 
 ## Database location
@@ -124,8 +123,8 @@ It has no settings; it's a simple app just for saving and accessing your clipboa
 ~/.local/share/clipstar/clipgnome.db
 ~/.local/share/clipstar/clipgnome.db-shm
 ~/.local/share/clipstar/clipgnome.db-wal
-
 ```
+---
 
 SQLite WAL mode — safe for concurrent access.
 
