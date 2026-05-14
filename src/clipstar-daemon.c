@@ -142,7 +142,7 @@ static void cs_resolve_db_path(void) {
 
     /* 1. Try XDG_DATA_HOME */
     if (xdg_data && xdg_data[0] != '\0') {
-        snprintf(g_db_path, sizeof(g_db_path), "%s/clipgnome/clipgnome.db", xdg_data);
+        snprintf(g_db_path, sizeof(g_db_path), "%s/clipstar/clipstar.db", xdg_data);
         return;
     }
 
@@ -155,10 +155,10 @@ static void cs_resolve_db_path(void) {
     }
 
     if (home) {
-        snprintf(g_db_path, sizeof(g_db_path), "%s/.local/share/clipgnome/clipgnome.db", home);
+        snprintf(g_db_path, sizeof(g_db_path), "%s/.local/share/clipstar/clipstar.db", home);
     } else {
         /* 3. Ultimate fallback if user has no home directory */
-        snprintf(g_db_path, sizeof(g_db_path), "/tmp/clipgnome.db");
+        snprintf(g_db_path, sizeof(g_db_path), "/tmp/clipstar.db");
     }
 }
 

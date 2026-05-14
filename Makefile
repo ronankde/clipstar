@@ -1,10 +1,10 @@
 # ────────────────────────────────────────────────────────────────
-#  ClipGnome & ClipStar Daemon - Unified Makefile
+#  ClipStar & ClipStar Daemon - Unified Makefile
 # ────────────────────────────────────────────────────────────────
 
-APP_UI     := clipgnome
+APP_UI     := clipstar
 APP_DAEMON := clipstar-daemon
-APP_ID     := io.github.clipgnome
+APP_ID     := io.github.clipstar
 VERSION    := 1.0.0
 
 # Base Directories
@@ -64,7 +64,7 @@ UI_OBJS    := $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(UI_SRCS))
 
 all: check-deps $(BUILDDIR)/$(APP_UI) $(BUILDDIR)/$(APP_DAEMON)
 
-# Build the Frontend (ClipGnome)
+# Build the Frontend (ClipStar)
 $(BUILDDIR)/$(APP_UI): $(UI_OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS_UI)
 	@echo "✓ Build successful: $@"

@@ -13,9 +13,9 @@ struct _ClipDatabase {
 
 static gchar *get_db_path(void) {
     const gchar *data_dir = g_get_user_data_dir();
-    gchar *dir = g_build_filename(data_dir, "clipgnome", NULL);
+    gchar *dir = g_build_filename(data_dir, "clipstar", NULL);
     g_mkdir_with_parents(dir, 0700);
-    gchar *path = g_build_filename(dir, CLIP_GNOME_DB_NAME, NULL);
+    gchar *path = g_build_filename(dir, CLIP_STAR_DB_NAME, NULL);
     g_free(dir);
     return path;
 }
@@ -49,7 +49,6 @@ gboolean clip_database_open(ClipDatabase *self) {
                    sqlite3_errmsg(self->db));
         return FALSE;
     }
-    /* performance pragmas */
     db_exec(self, "PRAGMA journal_mode=WAL;");
     db_exec(self, "PRAGMA synchronous=NORMAL;");
     db_exec(self, "PRAGMA foreign_keys=ON;");
@@ -57,7 +56,7 @@ gboolean clip_database_open(ClipDatabase *self) {
 }
 
 void clip_database_migrate(ClipDatabase *self) {
-    const gchar *ddl =
+    db_exec(self, 
         "CREATE TABLE IF NOT EXISTS clips ("
         "  id         INTEGER PRIMARY KEY AUTOINCREMENT,"
         "  type       INTEGER NOT NULL DEFAULT 0,"
@@ -65,32 +64,42 @@ void clip_database_migrate(ClipDatabase *self) {
         "  blob       BLOB,"
         "  mime_type  TEXT,"
         "  preview    TEXT,"
-        "  timestamp  INTEGER NOT NULL,"
-        "  starred    INTEGER NOT NULL DEFAULT 0"
+        "  timestamp  INTEGER NOT NULL"
         ");"
-        "CREATE INDEX IF NOT EXISTS idx_clips_timestamp ON clips(timestamp DESC);"
-        "CREATE INDEX IF NOT EXISTS idx_clips_starred   ON clips(starred);"
-        /* FTS5 virtual table for full-text search on preview + text */
-        "CREATE VIRTUAL TABLE IF NOT EXISTS clips_fts USING fts5("
-        "  preview, text, content='clips', content_rowid='id'"
-        ");"
-        /* triggers to keep FTS in sync */
-        "CREATE TRIGGER IF NOT EXISTS clips_ai AFTER INSERT ON clips BEGIN"
-        "  INSERT INTO clips_fts(rowid, preview, text)"
-        "    VALUES (new.id, new.preview, new.text);"
-        "END;"
-        "CREATE TRIGGER IF NOT EXISTS clips_ad AFTER DELETE ON clips BEGIN"
-        "  INSERT INTO clips_fts(clips_fts, rowid, preview, text)"
-        "    VALUES ('delete', old.id, old.preview, old.text);"
-        "END;"
-        "CREATE TRIGGER IF NOT EXISTS clips_au AFTER UPDATE ON clips BEGIN"
-        "  INSERT INTO clips_fts(clips_fts, rowid, preview, text)"
-        "    VALUES ('delete', old.id, old.preview, old.text);"
-        "  INSERT INTO clips_fts(rowid, preview, text)"
-        "    VALUES (new.id, new.preview, new.text);"
-        "END;";
+        "CREATE INDEX IF NOT EXISTS idx_clips_timestamp ON clips(timestamp DESC);");
 
-    db_exec(self, ddl);
+    /* Recriamos o índice FTS para garantir que está limpo e sem resquícios antigos */
+    db_exec(self, "DROP TABLE IF EXISTS clips_fts;");
+    db_exec(self, "CREATE VIRTUAL TABLE clips_fts USING fts5(preview, text);");
+
+    /* Removemos gatilhos velhos que podem estar com a sintaxe errada */
+    db_exec(self, "DROP TRIGGER IF EXISTS clips_ai;");
+    db_exec(self, "DROP TRIGGER IF EXISTS clips_ad;");
+    db_exec(self, "DROP TRIGGER IF EXISTS clips_au;");
+
+    /* Sintaxe CORRETA para deletar e atualizar FTS independente */
+    const gchar *triggers =
+        "CREATE TRIGGER clips_ai AFTER INSERT ON clips BEGIN"
+        "  INSERT INTO clips_fts(rowid, preview, text)"
+        "    VALUES (new.id, new.preview, CASE WHEN new.type IN (0, 4) THEN new.text ELSE '' END);"
+        "END;"
+        
+        "CREATE TRIGGER clips_ad AFTER DELETE ON clips BEGIN"
+        "  DELETE FROM clips_fts WHERE rowid = old.id;" /* Sintaxe corrigida! */
+        "END;"
+        
+        "CREATE TRIGGER clips_au AFTER UPDATE ON clips BEGIN"
+        "  DELETE FROM clips_fts WHERE rowid = old.id;" /* Sintaxe corrigida! */
+        "  INSERT INTO clips_fts(rowid, preview, text)"
+        "    VALUES (new.id, new.preview, CASE WHEN new.type IN (0, 4) THEN new.text ELSE '' END);"
+        "END;";
+    
+    db_exec(self, triggers);
+
+    /* Repopula o índice */
+    db_exec(self, 
+        "INSERT INTO clips_fts(rowid, preview, text) "
+        "SELECT id, preview, CASE WHEN type IN (0, 4) THEN text ELSE '' END FROM clips;");
 }
 
 void clip_database_close(ClipDatabase *self) {
@@ -122,7 +131,6 @@ static ClipItem *row_to_item(sqlite3_stmt *stmt) {
     item->preview    = prev ? g_strdup(prev) : NULL;
 
     item->timestamp  = sqlite3_column_int64(stmt, 6);
-    item->starred    = sqlite3_column_int(stmt, 7) != 0;
     return item;
 }
 
@@ -145,10 +153,15 @@ const gchar *clip_database_get_path(ClipDatabase *self) {
 
 gboolean clip_database_delete(ClipDatabase *self, gint64 id) {
     sqlite3_stmt *stmt;
-    sqlite3_prepare_v2(self->db,
-        "DELETE FROM clips WHERE id=?;", -1, &stmt, NULL);
+    sqlite3_prepare_v2(self->db, "DELETE FROM clips WHERE id=?;", -1, &stmt, NULL);
     sqlite3_bind_int64(stmt, 1, id);
     int rc = sqlite3_step(stmt);
+    
+    /* Agora o banco de dados vai nos avisar se algo falhar! */
+    if (rc != SQLITE_DONE) {
+        g_warning("Falha silenciosa do SQLite ao deletar: %s", sqlite3_errmsg(self->db));
+    }
+    
     sqlite3_finalize(stmt);
     return rc == SQLITE_DONE;
 }
@@ -156,27 +169,16 @@ gboolean clip_database_delete(ClipDatabase *self, gint64 id) {
 void clip_database_touch(ClipDatabase *self, gint64 id) {
     gint64 now = g_get_real_time() / G_USEC_PER_SEC;
     sqlite3_stmt *stmt;
-    sqlite3_prepare_v2(self->db,
-        "UPDATE clips SET timestamp=? WHERE id=?;", -1, &stmt, NULL);
+    sqlite3_prepare_v2(self->db, "UPDATE clips SET timestamp=? WHERE id=?;", -1, &stmt, NULL);
     sqlite3_bind_int64(stmt, 1, now);
     sqlite3_bind_int64(stmt, 2, id);
     sqlite3_step(stmt);
     sqlite3_finalize(stmt);
 }
 
-gboolean clip_database_star(ClipDatabase *self, gint64 id, gboolean starred) {
-    sqlite3_stmt *stmt;
-    sqlite3_prepare_v2(self->db,
-        "UPDATE clips SET starred=? WHERE id=?;", -1, &stmt, NULL);
-    sqlite3_bind_int  (stmt, 1, starred ? 1 : 0);
-    sqlite3_bind_int64(stmt, 2, id);
-    int rc = sqlite3_step(stmt);
-    sqlite3_finalize(stmt);
-    return rc == SQLITE_DONE;
-}
-
 void clip_database_clear(ClipDatabase *self) {
-    db_exec(self, "DELETE FROM clips WHERE starred=0;");
+    db_exec(self, "DELETE FROM clips;");
+    db_exec(self, "DELETE FROM clips_fts;");
 }
 
 /* ── queries ─────────────────────────────────────────────────── */
@@ -184,38 +186,32 @@ void clip_database_clear(ClipDatabase *self) {
 GPtrArray *clip_database_recent(ClipDatabase *self, gint limit) {
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(self->db,
-        "SELECT id,type,text,blob,mime_type,preview,timestamp,starred"
-        " FROM clips ORDER BY starred DESC, timestamp DESC LIMIT ?;",
+        "SELECT id,type,text,blob,mime_type,preview,timestamp"
+        " FROM clips ORDER BY timestamp DESC LIMIT ?;",
         -1, &stmt, NULL);
     sqlite3_bind_int(stmt, 1, limit);
     return run_select(self, stmt);
 }
 
-GPtrArray *clip_database_starred(ClipDatabase *self) {
-    sqlite3_stmt *stmt;
-    sqlite3_prepare_v2(self->db,
-        "SELECT id,type,text,blob,mime_type,preview,timestamp,starred"
-        " FROM clips WHERE starred=1 ORDER BY timestamp DESC;",
-        -1, &stmt, NULL);
-    return run_select(self, stmt);
-}
-
-GPtrArray *clip_database_search(ClipDatabase *self,
-                                const gchar  *query,
-                                gint          limit) {
+GPtrArray *clip_database_search(ClipDatabase *self, const gchar *query, gint limit) {
     if (!query || query[0] == '\0')
         return clip_database_recent(self, limit);
 
-    /* build FTS query – append * for prefix matching */
-    gchar *fts_query = g_strdup_printf("%s*", query);
+    GString *fts_str = g_string_new("\"");
+    for (const gchar *p = query; *p != '\0'; p++) {
+        if (*p == '"') g_string_append(fts_str, "\"\"");
+        else g_string_append_c(fts_str, *p);
+    }
+    g_string_append(fts_str, "\"*");
+    gchar *fts_query = g_string_free(fts_str, FALSE);
 
     sqlite3_stmt *stmt;
     const gchar *sql =
-        "SELECT c.id,c.type,c.text,c.blob,c.mime_type,c.preview,c.timestamp,c.starred"
+        "SELECT c.id,c.type,c.text,c.blob,c.mime_type,c.preview,c.timestamp"
         " FROM clips c"
         " JOIN clips_fts f ON c.id = f.rowid"
         " WHERE clips_fts MATCH ?"
-        " ORDER BY c.starred DESC, rank, c.timestamp DESC"
+        " ORDER BY rank, c.timestamp DESC"
         " LIMIT ?;";
 
     sqlite3_prepare_v2(self->db, sql, -1, &stmt, NULL);
@@ -225,5 +221,3 @@ GPtrArray *clip_database_search(ClipDatabase *self,
 
     return run_select(self, stmt);
 }
-
-/* end of database.c */

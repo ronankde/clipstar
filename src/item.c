@@ -104,20 +104,16 @@ void clip_item_free(ClipItem *item) {
 }
 
 gchar *clip_item_make_preview(const ClipItem *item) {
-    if (!item) return g_strdup("(empty)");
+    if (!item) return g_strdup("");
 
     switch (item->type) {
         case CLIP_TYPE_TEXT:
         case CLIP_TYPE_URI: {
-            if (!item->text || item->text[0] == '\0')
-                return g_strdup("(empty text)");
-
-            /* collapse whitespace for preview */
-            gchar *collapsed = g_strdup(item->text);
-            for (gchar *p = collapsed; *p; p++)
-                if (*p == '\n' || *p == '\r' || *p == '\t')
-                    *p = ' ';
-
+            if (!item->text) return g_strdup("");
+            
+            gchar *collapsed = g_strdelimit(g_strdup(item->text), "\n\r\t", ' ');
+            g_strstrip(collapsed);
+            
             if (g_utf8_strlen(collapsed, -1) > 80) {
                 gchar *end = g_utf8_offset_to_pointer(collapsed, 80);
                 gchar *truncated = g_strndup(collapsed, end - collapsed);
@@ -132,33 +128,50 @@ gchar *clip_item_make_preview(const ClipItem *item) {
         case CLIP_TYPE_IMAGE: {
             gsize size = item->blob ? g_bytes_get_size(item->blob) : 0;
             if (size < 1024)
-                return g_strdup_printf("🖼 Image (%zu B)", size);
+                return g_strdup_printf("Image (%zu B)", size);
             else if (size < 1024 * 1024)
-                return g_strdup_printf("🖼 Image (%.1f KB)", size / 1024.0);
+                return g_strdup_printf("Image (%.1f KB)", size / 1024.0);
             else
-                return g_strdup_printf("🖼 Image (%.1f MB)", size / (1024.0 * 1024.0));
+                return g_strdup_printf("Image (%.1f MB)", size / (1024.0 * 1024.0));
         }
 
         case CLIP_TYPE_FILE:
         case CLIP_TYPE_FOLDER: {
-            const gchar *icon = (item->type == CLIP_TYPE_FOLDER) ? "📁" : "📄";
-      
-	    if (!item->text) return g_strdup_printf("%s %s", icon, item->type == CLIP_TYPE_FOLDER ? "Folder" : "File");
-      
-	    gchar **lines = g_strsplit(item->text, "\n", -1);
-	    gint count = g_strv_length(lines);
-	    gchar *basename = g_path_get_basename(lines[0] ? lines[0] : "");
-	    gchar *result;
-            
-	    if (count > 1)
-	      result = g_strdup_printf("%s %s (+%d more)", icon, basename, count - 1);
-	    else
-	      result = g_strdup_printf("%s %s", icon, basename);
+            if (!item->text) 
+                return g_strdup(item->type == CLIP_TYPE_FOLDER ? "Folder" : "File");
+
+            gchar **lines = g_strsplit(item->text, "\n", -1);
+            gchar *first_valid_path = NULL;
+            gint valid_count = 0;
+
+            for (gint i = 0; lines && lines[i]; i++) {
+                gchar *line = g_strstrip(lines[i]);
+                if (line[0] == '\0' || g_strcmp0(line, "copy") == 0 || g_strcmp0(line, "cut") == 0) 
+                    continue;
                 
-	    g_free(basename);
-	    g_strfreev(lines);
-	    return result;
-	}
+                if (!first_valid_path) 
+                    first_valid_path = line;
+                
+                valid_count++;
+            }
+
+            gchar *result;
+            if (valid_count == 0) {
+                result = g_strdup(item->type == CLIP_TYPE_FOLDER ? "Folder" : "File");
+            } else if (valid_count == 1) {
+                gchar *basename = g_path_get_basename(first_valid_path);
+                result = g_strdup(basename);
+                g_free(basename);
+            } else {
+                gchar *basename = g_path_get_basename(first_valid_path);
+                result = g_strdup_printf("%s (+%d items)", basename, valid_count - 1);
+                g_free(basename);
+            }
+
+            g_strfreev(lines);
+            return result;
+        }
     }
-    return g_strdup("(unknown)");
+
+    return g_strdup("");
 }

@@ -16,10 +16,8 @@ const gchar  *clip_database_get_path(ClipDatabase *db);
 /* CRUD */
 gboolean      clip_database_delete  (ClipDatabase *db, gint64 id);
 void          clip_database_touch   (ClipDatabase *db, gint64 id);
-gboolean      clip_database_star    (ClipDatabase *db, gint64 id, gboolean starred);
 void          clip_database_clear   (ClipDatabase *db);
 
 /* Queries */
 GPtrArray    *clip_database_search  (ClipDatabase *db, const gchar *query, gint limit);
 GPtrArray    *clip_database_recent  (ClipDatabase *db, gint limit);
-GPtrArray    *clip_database_starred (ClipDatabase *db);

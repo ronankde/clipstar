@@ -1,17 +1,15 @@
-# ClipGnome 📋
+# ClipStar 📋
 
 **Clipboard manager for GNOME** — monitors your clipboard history, stores text, images and file copies, with fast fuzzy search. Built with GTK4, Wayland, C, Make and SQLite.
+It's designed to be basic, fulfilling the functions we use most in a clipboard manager; no thumbnails, no syntax highlighting, which are basically useless.
 
 ---
 
 ## Features
 
 - **Text history** — stores every text copy with full-text search (FTS5)
-- **Image history** — saves PNG snapshots of image copies
 - **File copies** — records copied files with optional binary snapshot
-- **⭐ Star / pin** important items so they survive history pruning
 - **Fast search** — debounced search with SQLite FTS5 prefix matching
-- **Keyboard shortcut** — `Super+V` to toggle the window
 - **ESC** to hide; click any item to restore it to the clipboard
 - Keeps the last **500** entries (configurable in `application.h`)
 - Lightweight: pure C, no Electron, no Python
@@ -54,40 +52,38 @@ make release
 make run
 ```
 
-The binary is placed at `build/clipgnome`.
+The binary is placed at `build/clipstar` && 'build/clipstart-daemon.
 
 ---
 
-## Install system-wide
+## Local install (recommended)
 
 ```bash
-sudo make install
-# installs to /usr/local/bin/clipgnome
+make install
+# installs to $HOME/.local/bin/clipstar $HOME/.local/bin/clipstar-daemon
 ```
 
-### Autostart with GNOME
+### Start daemon 
 
 ```bash
-mkdir -p ~/.config/autostart
-cp data/io.github.clipgnome.desktop ~/.config/autostart/
+(no sudo)
+systemctl daemon-reload --user
+systemctl start --user clipstar-daemon
+configure your gnome shorcuts to open clipstar app ex.(Shift+Super+V)
 ```
-
-Then add `X-GNOME-Autostart-enabled=true` to that file.
-
 ---
 
 ## Usage
 
-| Action                         | How                          |
-|-------------------------------|-------------------------------|
-| Open / close window           | `Super+V` or click app icon  |
-| Search history                | Type in the search bar       |
-| Copy item back to clipboard   | Click row **or** copy button |
-| Star / pin item               | Click ☆ button               |
-| Show only starred             | Toggle ⭐ filter             |
-| Delete single item            | Click 🗑 button              |
-| Clear all history             | Click "🗑 Clear history"     |
-| Close window without copying  | `Escape`                     |
+| Action                         | How                               |
+|-------------------------------|------------------------------------|
+| Open / close window           | `Shift+Super+V` or click app icon  |
+| Search history                | Type in the search bar             |
+| Copy item back to clipboard   | Click row **or** copy button       |
+| Browse through the items      | Up/Down, Enter & Delete            |
+| Delete single item            | Click 🗑 button                    |
+| Clear all history             | Click "🗑"                         |
+| Close window without copying  | `Escape`                           |
 
 ---
 
@@ -96,15 +92,17 @@ Then add `X-GNOME-Autostart-enabled=true` to that file.
 ```
 clipgnome/
 ├── src/
-│   ├── main.c          # Entry point
-│   ├── application.c/h # GtkApplication subclass, wires everything
-│   ├── clipboard.c/h   # GdkClipboard watcher (GObject, emits "new-item")
-│   ├── database.c/h    # SQLite persistence layer (CRUD + FTS5 search)
-│   ├── item.c/h        # ClipItem data model
-│   └── window.c/h      # GTK4 UI: search bar, list, actions
+│   ├── main.c            # Entry point
+│   ├── application.c/h   # GtkApplication subclass, wires everything
+│   ├── clipboard.c/h     # Database watcher
+│   ├── clipstar-daemon.c # Clipboard watcher daemon
+│   ├── database.c/h      # SQLite persistence layer (CRUD + FTS5 search)
+│   ├── item.c/h          # ClipItem data model
+│   └── window.c/h        # GTK4 UI: search bar, list, actions
 ├── data/
-│   ├── io.github.clipgnome.desktop
-│   └── io.github.clipgnome.svg
+│   ├── clipstart-daemon.service
+│   ├── clipgnome.desktop
+│   └── clipgnome.svg
 ├── Makefile
 └── README.md
 ```
@@ -113,11 +111,7 @@ clipgnome/
 
 ## Configuration
 
-Edit `src/application.h`:
-
-```c
-#define CLIP_MAX_HISTORY   500          /* items to keep in DB        */
-#define CLIP_MAX_FILE_SIZE (10*1024*1024) /* max file blob size        */
+It has no settings; it's a simple app just for saving and accessing your clipboards.
 ```
 
 ---
@@ -125,7 +119,10 @@ Edit `src/application.h`:
 ## Database location
 
 ```
-~/.local/share/clipgnome/clipgnome.db
+~/.local/share/clipstar/clipgnome.db
+~/.local/share/clipstar/clipgnome.db-shm
+~/.local/share/clipstar/clipgnome.db-wal
+
 ```
 
 SQLite WAL mode — safe for concurrent access.
@@ -134,7 +131,8 @@ SQLite WAL mode — safe for concurrent access.
 
 ## Wayland notes
 
-ClipGnome uses the GDK clipboard API which works on **both X11 and Wayland** transparently. On Wayland, clipboard access requires a focused window or an explicit paste operation — this is a security feature of the protocol. The monitor fires on every `changed` signal emitted by the display's clipboard.
+ClipStar is an app designed for Gnome with Wayland. It hasn't been tested on other desktop environments. It's also worth mentioning that the daemon depends on XWayland to function, since Gnome doesn't implement wlr-data-control, making it impossible to use wl-paste. However, only the background daemon depends on XWayland; the frontend is designed for Wayland and works very well. It simply manages the database created and populated by the clipstar-daemon.
+Not to mention that it performs better than most clipboard managers.
 
 ---
 

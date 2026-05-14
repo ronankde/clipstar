@@ -21,7 +21,6 @@ struct _ClipItem {
     gchar       *mime_type;   /* e.g. "text/plain", "image/png"              */
     gchar       *preview;     /* short human-readable preview for UI         */
     gint64       timestamp;   /* unix seconds                                */
-    gboolean     starred;     /* user-pinned item                            */
 };
 
 ClipItem  *clip_item_new_text   (const gchar *text);
