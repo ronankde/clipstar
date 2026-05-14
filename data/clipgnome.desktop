@@ -1,0 +1,15 @@
+[Desktop Entry]
+Name=ClipGnome
+GenericName=Clipboard Manager
+Comment=Clipboard history manager for GNOME
+Exec=clipgnome
+Icon=io.github.clipgnome
+Terminal=false
+Type=Application
+Categories=Utility;GTK;
+Keywords=clipboard;copy;paste;history;
+StartupWMClass=clipgnome
+X-GNOME-UsesNotifications=false
+
+# Autostart hint (copy to ~/.config/autostart/ to enable)
+# X-GNOME-Autostart-enabled=true

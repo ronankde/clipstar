@@ -1,0 +1,22 @@
+[Unit]
+Description=ClipStar Clipboard Daemon
+
+# Start after the graphical session is ready
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/clipstar-daemon
+Restart=on-failure
+RestartSec=3s
+
+# Pass the X display from the session
+Environment=DISPLAY=:0
+
+# Logging goes to journald (view with: journalctl --user -u clipstar-daemon -f)
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical-session.target
