@@ -1,5 +1,7 @@
 # ClipStar 📋
 
+![ClipStar](./data/clipstar.svg)
+
 **Clipboard manager for GNOME** — monitors your clipboard history, stores text, images and file copies, with fast fuzzy search. Built with GTK4, Wayland, C, Make and SQLite.
 It's designed to be basic, fulfilling the functions we use most in a clipboard manager; no thumbnails, no syntax highlighting, which are basically useless.
 
