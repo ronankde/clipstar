@@ -741,7 +741,6 @@ static GtkWidget *build_row(ClipWindow *self, ClipItem *item, gboolean is_first)
  * not always expose the gnome-copied-files MIME type that Nautilus
  * checks before enabling the Paste action.
  */
-/* Helper para criar o provedor de conteúdo compatível com Nautilus e Navegadores */
 
 static void restore_item_to_clipboard(ClipWindow *self, ClipItem *item) {
     GdkDisplay   *display   = gdk_display_get_default();
@@ -760,7 +759,7 @@ static void restore_item_to_clipboard(ClipWindow *self, ClipItem *item) {
         
         for (gint i = 0; lines && lines[i]; i++) {
             gchar *line = g_strstrip(lines[i]);
-            /* Ignora linhas vazias ou as marcações antigas do daemon */
+
             if (line[0] == '\0' || g_strcmp0(line, "copy") == 0 || g_strcmp0(line, "cut") == 0) continue;
             
             GFile *file = g_file_new_for_path(line);
@@ -769,16 +768,14 @@ static void restore_item_to_clipboard(ClipWindow *self, ClipItem *item) {
         g_strfreev(lines);
 
         if (file_list) {
-            file_list = g_slist_reverse(file_list); // Restaura a ordem original
+            file_list = g_slist_reverse(file_list);
             
-            /* Delega a formatação para a API Nativa do GTK4 (GTK 4.6+) */
             GValue value = G_VALUE_INIT;
             g_value_init(&value, GDK_TYPE_FILE_LIST);
             g_value_take_boxed(&value, gdk_file_list_new_from_list(file_list));
             
             gdk_clipboard_set_value(clipboard, &value);
             
-            /* Limpeza de memória */
             g_value_unset(&value);
             g_slist_free_full(file_list, g_object_unref);
         }
@@ -798,7 +795,7 @@ static void on_copy_item(GtkButton *btn, gpointer user_data) {
         ClipItem *item = g_ptr_array_index(self->current_items, i);
         if (item->id == (gint64)id) {
             restore_item_to_clipboard(self, item);
-            clip_window_refresh(self); /* Atualiza a lista! */
+            clip_window_refresh(self);
             break;
         }
     }
